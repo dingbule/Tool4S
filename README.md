@@ -8,7 +8,7 @@ A GUI-based software for seismic site station selection data processing and anal
 
 ## Features
 
-- **Multi-format Data Support**: Plugin architecture for various seismic formats (MSEED, SAC, SEGY, ZW, and proprietary formats)
+- **Multi-format Data Support**: Plugin architecture for various seismic formats (MSEED, SAC, SEGY, ..., and proprietary formats)
 - **Advanced PSD Analysis**: Power Spectral Density calculation with noise model comparison
 - **Data Processing Tools**: File cutting, merging, and format conversion
 - **Parameter Testing**: PSD parameter optimization and batch processing
@@ -16,54 +16,7 @@ A GUI-based software for seismic site station selection data processing and anal
 
 ## Examples & Screenshots
 
-Here are some examples showing how to use Tool4S for seismic data analysis:
-
-### 1. Setting Up a Project
-
-![Project Setup](docs/images/project_setup.png)
-
-Start by creating a new project and selecting your working directory:
-- Launch Tool4S
-- Go to File > Project Parameters
-- Set your project directory and output folder
-
-### 2. Data Processing
-
-![Data Processing](docs/images/data_processing.png)
-
-Process your raw seismic data files:
-- Select the file in the project browser
-- Use the Tools menu to access processing options
-- Cut, merge or convert files as needed
-
-### 3. PSD Calculation
-
-![PSD Calculation](docs/images/psd_calculation.png)
-
-Calculate Power Spectral Density:
-- Select processed files
-- Open the PSD Calculation dialog
-- Configure parameters (window size, overlap, etc.)
-- Run the calculation
-
-### 4. Analysis and Visualization
-
-![PSD Analysis](docs/images/psd_analysis.png)
-
-Analyze your results:
-- View PSD plots with noise model comparisons
-- Generate PDF reports
-- Export results for further analysis
-
-### 5. Batch Processing
-
-![Batch Processing](docs/images/batch_processing.png)
-
-Process multiple files at once:
-- Select multiple files in the browser
-- Use batch processing options
-- Configure common parameters
-- Execute batch operations
+Example data files and a simple how-to are provided in `example_data` folder.
 
 ## Installation
 
@@ -103,7 +56,7 @@ python __main__.py
 
 ## Executable Application  (Windows)
 
-We provide a pre-built executable for Windows 10 in the `Application` folder. You can download it to use Tool4S directly.
+We provide a pre-built executable for Windows 10 in `Application`, unzip the 'tool4s.zip' to get the executable and put it under `Application` folder.
 
 ### Building Your Own Executable
 
@@ -135,7 +88,7 @@ tool4s/
 ├── requirements.txt # Dependencies
 
 *Used to built your own executables
-├── Application/    # Pre-built executables
+├── Application     # pre-built executable
 ├── rthooks         # Used by pyinstaller
 ├── hooks           # Used by pyinstaller
 ├── main.spec       # Used by pyinstaller
@@ -145,48 +98,13 @@ tool4s/
 *Folder and file created while Tool4S starts up once
 ├── logs            # logs 
 └── config.ini      # config for Tool4S
-
-
+*Documents
+├── docs            # screenshots
+└── README.md       # introduction
 
 
 ```
 
-## Usage Guide
-
-1. **Launch the application** and set your project directory
-2. **Configure parameters** in the settings dialog
-   - Set output folder location
-   - Configure project-specific parameters
-3. **Process raw data files** using the Tools menu
-   - Cut, merge, or convert seismic data files
-   - Prepare data for PSD calculation
-4. **Perform PSD analysis**
-   - Test different PSD parameters to optimize results
-   - Run batch PSD calculations on multiple files
-5. **Analyze results**
-   - Compare with standard noise models (NHNM/NLNM)
-   - Generate PDF reports and visualizations
-
-## Key Features Explained
-
-### Power Spectral Density (PSD) Analysis
-
-Tool4S implements advanced PSD calculation for seismic data:
-
-- Detrending and sensitivity correction
-- Optional high-pass and band-pass filtering
-- Welch's method with configurable window parameters
-- Instrument response removal
-- Octave-based smoothing for noise analysis
-- Comparison with New High/Low Noise Models
-
-### Plugin System
-
-The application uses a plugin architecture for reading different seismic data formats:
-
-- Base reader interface with standardized methods
-- Support for common formats (MSEED, SAC, SEGY)
-- Easy extension for custom or proprietary formats
 
 ## Dependencies
 
