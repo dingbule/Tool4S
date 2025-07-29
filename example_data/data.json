@@ -1,0 +1,24 @@
+{
+    "name_parser": {
+        "delimiters": "_ _ _ .",
+        "parts_info": "NO NO YES! NO msd",
+        "name_info": "Network:;Station:YES!;Location:;Channel:"
+    },
+    "test_result": true,
+    "data_params": {
+        "dataFormat": "zw",
+        "outputFormat": "mseed",
+        "outputFolder": "G:\\tool4s\\example_data\\tool4s",
+        "traceNum": 3,
+        "componentName": "N,E,Z",
+        "startOnHour": true,
+        "instrumentTpye": 0,
+        "naturalPeriod": "10",
+        "wholeSensitivity": "1677721599",
+        "damp": "0.707"
+    },
+    "plot_params": {
+        "enable_downsampling": false,
+        "chunk_size": 10000
+    }
+}

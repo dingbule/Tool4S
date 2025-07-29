@@ -1,0 +1,14 @@
+{
+    "filter_enabled": false,
+    "filter_type": "Band Pass",
+    "filter_freq": [
+        0.1,
+        20.0
+    ],
+    "response_enabled": true,
+    "window_size": 1000.0,
+    "overlap": 80.0,
+    "window_type": "hann",
+    "psd_freq_min": 0.1,
+    "psd_freq_max": 20.0
+}
