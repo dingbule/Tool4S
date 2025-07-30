@@ -1,6 +1,6 @@
 # Example Data for Tool4S
 
-This directory contains sample seismic data files for demonstrating Tool4S functionality. The examples show how to process seismic data and perform PSD (Power Spectral Density) analysis.
+This directory contains sample seismic data files for demonstrating Tool4S functionality. The examples show how to process seismic data and perform PSD (Power Spectral Density) analysis. 
 
 ## Data Files
 
@@ -48,7 +48,7 @@ You can double-click a raw data file in the left project panel to view the data 
 
 Since the example data files have exactly one-hour length with 3 components, we only need to split them into 3 individual files using change format tool.
 
-Note:*In fact, other tools have the default splitting and changing format function.*
+Note: *In fact, other tools have the default splitting and changing format function.*
 
 #### Format Conversion
 
@@ -103,6 +103,8 @@ We provide a default PSD configuration file named psd.json, you can set up your 
    - Click **Start Processing** to calculate PSDs
   
 ![psd_cal](../docs/images/9psd_calculation.png) 
+
+After the calculation, you can double-click a psd file in the output panel to view the PSD plotting.
 
 ### 5. PSD Analysis
 
