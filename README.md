@@ -9,27 +9,27 @@ A GUI-based software for seismic site station selection data processing and anal
 ## Features
 
 - **Multi-format Data Support**: Plugin architecture for various seismic formats (MSEED, SAC, SEGY, ZW, and proprietary formats)
-- **Advanced PSD Analysis**: Power Spectral Density calculation with noise model comparison
 - **Data Processing Tools**: File cutting, merging, and format conversion
-- **Parameter Testing**: PSD parameter optimization and batch processing
-- **Interactive Visualization**: Real-time plotting and comprehensive reporting
+- **Parameter Testing**: Real-time Power Spectral Density parameter test
+- **PSD calculation & Analysis**: PSD calculation and analysis using various methods.
+- **Visualization**: File plotting and interactive visualization using Matplotlib
 
 ## Examples & Screenshots
 
-Here are some examples showing how to use Tool4S for seismic data analysis:
+Here are some examples showing how to use Tool4S for seismic data analysis, a step-by-step instruction is provided in `example_data`:
 
 ### 1. Setting Up a Project
 
-![Project Setup](docs/images/project_setup.png)
+![Project Setup](docs/images/2open_testfile.png)
 
 Start by creating a new project and selecting your working directory:
 - Launch Tool4S
 - Go to File > Project Parameters
-- Set your project directory and output folder
+- Set your project parameters
 
 ### 2. Data Processing
 
-![Data Processing](docs/images/data_processing.png)
+![Data Processing](docs/images/6add_files_process.png)
 
 Process your raw seismic data files:
 - Select the file in the project browser
@@ -38,7 +38,7 @@ Process your raw seismic data files:
 
 ### 3. PSD Calculation
 
-![PSD Calculation](docs/images/psd_calculation.png)
+![PSD Calculation](docs/images/8psd_test.png)
 
 Calculate Power Spectral Density:
 - Select processed files
@@ -48,22 +48,12 @@ Calculate Power Spectral Density:
 
 ### 4. Analysis and Visualization
 
-![PSD Analysis](docs/images/psd_analysis.png)
+![PSD Analysis](docs/images/10psd_analysis.png)
 
 Analyze your results:
 - View PSD plots with noise model comparisons
 - Generate PDF reports
 - Export results for further analysis
-
-### 5. Batch Processing
-
-![Batch Processing](docs/images/batch_processing.png)
-
-Process multiple files at once:
-- Select multiple files in the browser
-- Use batch processing options
-- Configure common parameters
-- Execute batch operations
 
 ## Installation
 
@@ -185,7 +175,7 @@ Tool4S implements advanced PSD calculation for seismic data:
 The application uses a plugin architecture for reading different seismic data formats:
 
 - Base reader interface with standardized methods
-- Support for common formats (MSEED, SAC, SEGY)
+- Support for common formats (MSEED, SAC, SEGY, etc)
 - Easy extension for custom or proprietary formats
 
 ## Dependencies
