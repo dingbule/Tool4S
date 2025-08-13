@@ -546,8 +546,7 @@ class PSDCalculationDialog(QDialog):
             item = root.child(i)
             item.setCheckState(0, Qt.Checked)
         
-        # Scan files after selection change
-        self.scan_files()
+       
         
     def _deselect_all_components(self):
         """Deselect all components."""
@@ -557,8 +556,7 @@ class PSDCalculationDialog(QDialog):
             item = root.child(i)
             item.setCheckState(0, Qt.Unchecked)
         
-        # Scan files after selection change
-        self.scan_files()
+       
         
     def _on_tree_item_changed(self, item, column):
         """Handle changes to tree item check state."""
@@ -580,8 +578,7 @@ class PSDCalculationDialog(QDialog):
         # Unblock signals
         self.station_tree.blockSignals(False)
         
-        # Scan files after selection change
-        self.scan_files()
+      
     
     def _set_children_check_state(self, parent, state):
         """Set check state for all children of parent item."""
@@ -783,8 +780,7 @@ class PSDCalculationDialog(QDialog):
             # Unblock signals
             self.station_tree.blockSignals(False)
             
-            # Scan files after selection change
-            self.scan_files()
+           
             
         except Exception as e:
             logger.error(f"Error selecting component {component}: {e}")
