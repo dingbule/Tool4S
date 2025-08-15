@@ -7,6 +7,7 @@ from scipy import signal
 from scipy.signal import butter, filtfilt, welch, detrend, freqresp
 from typing import Tuple, Optional, Union
 import logging
+import math
 from pathlib import Path
 
 # Configure logging
@@ -90,6 +91,42 @@ class PSDCalculator:
             logger.error(f"Error loading noise model file: {e}")
             raise
 
+    def _welch_window(self,n):
+        """
+        Return a welch window for data of length n.
+
+        Routine is checked against PITSA for both even and odd values, but not for
+        strange values like n<5.
+
+        .. note::
+            See e.g.:
+            http://www.cescg.org/CESCG99/TTheussl/node7.html
+
+        :type n: int
+        :param n: Length of window function.
+        :rtype: :class:`~numpy.ndarray`
+        :returns: Window function for tapering data.
+        """
+        n = math.ceil(n / 2.0)
+        taper_left = np.arange(n, dtype=np.float64)
+        taper_left = 1 - np.power(taper_left / n, 2)
+        # first/last sample is zero by definition
+        if n % 2 == 0:
+            # even number of samples: two ones in the middle, perfectly symmetric
+            taper_right = taper_left
+        else:
+            # odd number of samples: still two ones in the middle, however, not
+            # perfectly symmetric anymore. right side is shorter by one sample
+            nn = n - 1
+            taper_right = np.arange(nn, dtype=np.float64)
+            taper_right = 1 - np.power(taper_right / nn, 2)
+        taper_left = taper_left[::-1]
+        # first/last sample is zero by definition
+        taper_left[0] = 0.0
+        taper_right[-1] = 0.0
+        taper = np.concatenate((taper_left, taper_right))
+        return taper
+
     def calculate_psd(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Calculate Power Spectral Density."""
         if not isinstance(data, np.ndarray):
@@ -98,11 +135,17 @@ class PSDCalculator:
         if data.size == 0:
             raise ValueError("Input data is empty")
 
+        
+
         # Remove mean and detrend
         data = detrend(data - np.mean(data))
 
+        
+
         # Convert to physical unit by whole sensitivity
         data = data / self.sensitivity
+
+        
 
         # Apply filter if enabled
         if self._filter_enabled:
@@ -110,9 +153,11 @@ class PSDCalculator:
                 data = self._apply_highpass_filter(data)
             else:  # Band Pass
                 data = self._apply_bandpass_filter(data)
+        
 
         # Calculate raw PSD using welch method
         nperseg = min(int(self._window_size * self.sample_rate), data.size)
+        
         noverlap = int(self._overlap * nperseg)
         
         self.frequencies, psd = welch(data, 
@@ -120,6 +165,7 @@ class PSDCalculator:
                                     window=self._window_type,
                                     nperseg=nperseg,
                                     noverlap=noverlap)
+        
 
         # Filter frequencies based on PSD frequency range
         freq_mask = (self.frequencies >= self._psd_freq_min) & (self.frequencies <= self._psd_freq_max)
@@ -212,11 +258,14 @@ class PSDCalculator:
         high = self._high_freq / nyquist
         b, a = butter(5, [low, high], btype='band')
         return filtfilt(b, a, data)
+    
+    
 
     def _remove_response(self, psd: np.ndarray, frequencies: np.ndarray) -> np.ndarray:
         """Using theoretical transfer function to remove instrument response from PSD."""
         omega_n = 2 * np.pi / self.natural_period
         num = [1,0,0]  # numerator
+        
         den = [1, 2 * self.damping_ratio * omega_n, omega_n**2]  # denominator
         
         system = signal.lti(num, den)
