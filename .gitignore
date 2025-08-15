@@ -1,0 +1,8 @@
+config.ini
+
+dist/
+build/
+
+logs/
+
+*.pyc

@@ -617,14 +617,14 @@ class PSDPDFDialog(QDialog):
         self.colormap_combo.setVisible(is_colormap_needed)
         self.findChild(QLabel, "colormap_label").setVisible(is_colormap_needed)
         
-        if self.selected_files:
-            self.plot()
+        # if self.selected_files:
+        #     self.plot()
             
     def _on_colormap_changed(self, colormap):
         """Handle colormap change."""
         self.colormap = colormap
-        if self.selected_files:
-            self.plot()
+        # if self.selected_files:
+        #     self.plot()
             
     def _on_group_length_changed(self, group_length_text):
         """Handle group length change."""
@@ -641,8 +641,8 @@ class PSDPDFDialog(QDialog):
                 else:
                     self.group_length = value
                 
-                if self.selected_files and self.plot_type == "PSD":
-                    self.plot()
+                # if self.selected_files and self.plot_type == "PSD":
+                #     self.plot()
         except ValueError:
             # Invalid input, revert to default
             self.group_length_edit.setText("1")
@@ -667,8 +667,8 @@ class PSDPDFDialog(QDialog):
                 else:
                     self.group_length = value
                     
-            if self.selected_files and self.plot_type == "PSD":
-                self.plot()
+            # if self.selected_files and self.plot_type == "PSD":
+            #     self.plot()
         except ValueError:
             # Invalid input, revert to default
             self.group_length_edit.setText("1")
@@ -1351,7 +1351,7 @@ class PSDPDFDialog(QDialog):
         self.station_tree.blockSignals(False)
         
         # Scan files after selection change
-        self.scan_files()
+        #self.scan_files()
     
     def _set_children_check_state(self, parent, state):
         """Set check state for all children of parent item."""
@@ -1405,7 +1405,7 @@ class PSDPDFDialog(QDialog):
         self.station_tree.blockSignals(False)
         
         # Scan files after selection change
-        self.scan_files()
+        #self.scan_files()
         
     def _deselect_all_components(self):
         """Deselect all components."""
@@ -1427,7 +1427,7 @@ class PSDPDFDialog(QDialog):
         self.station_tree.blockSignals(False)
         
         # Scan files after selection change
-        self.scan_files()
+        #self.scan_files()
         
     def scan_files(self):
         """Scan for PSD files in selected components within the time range."""
@@ -1788,4 +1788,4 @@ class PSDPDFDialog(QDialog):
         self.station_tree.blockSignals(False)
         
         # Scan files after selection change
-        self.scan_files() 
+        #self.scan_files() 
