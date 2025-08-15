@@ -330,11 +330,7 @@ class MergeFilesDialog(BaseToolDialog):
     def start_processing(self):
         """Start processing files."""
         # Get selected files
-        selected_files = []
-        for i in range(self.file_list.count()):
-            item = self.file_list.item(i)
-            if item.checkState() == Qt.Checked:
-                selected_files.append(item.text())
+        selected_files = self._get_selected_files()
                 
         if not selected_files:
             QMessageBox.warning(
@@ -382,7 +378,7 @@ class MergeFilesDialog(BaseToolDialog):
         # Disable UI
         self.start_button.setEnabled(False)
         self.select_all.setEnabled(False)
-        self.file_list.setEnabled(False)
+        self.file_list.setEnabled(True)
         self.add_files.setEnabled(False)
         self.add_folders.setEnabled(False)
         self.reset_list.setEnabled(False)
@@ -400,4 +396,4 @@ class MergeFilesDialog(BaseToolDialog):
         QMessageBox.critical(self, "Error", message) 
 
     # The closeEvent and reject methods can be removed since the base class implementation
-    # now has improved thread handling and will be used instead 
+    # now has improved thread handling and will be used instead

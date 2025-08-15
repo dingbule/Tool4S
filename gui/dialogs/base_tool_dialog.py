@@ -5,8 +5,10 @@ Base dialog and worker classes for seismic data processing tools.
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                            QLineEdit, QProgressBar, QPushButton, QCheckBox,
                            QListWidget, QMessageBox, QTextEdit, QListWidgetItem,
-                           QGroupBox, QFileDialog)
-from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
+                           QGroupBox, QFileDialog, QListView)
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5.QtCore import QAbstractItemModel
+from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer
 import os
 from pathlib import Path
 import logging
@@ -175,10 +177,16 @@ class BaseToolDialog(QDialog):
         self.select_all.stateChanged.connect(self._on_select_all)
         files_layout.addWidget(self.select_all)
         
-        # File list
-        self.file_list = QListWidget()
-        self.file_list.setSelectionMode(QListWidget.ExtendedSelection)
-        self.file_list.itemChanged.connect(self._on_item_changed)
+        # File list model and view
+        self.file_model = QStandardItemModel()
+        self.file_list = QListView()
+        self.file_list.setModel(self.file_model)
+        self.file_list.setSelectionMode(QListView.ExtendedSelection)
+       
+        # Connect item changed signal
+        self.file_model.itemChanged.connect(self._on_item_changed)
+        
+       
         files_layout.addWidget(self.file_list)
         
         # Add file and folder buttons
@@ -198,7 +206,12 @@ class BaseToolDialog(QDialog):
         files_group.setLayout(files_layout)
         self.main_layout.addWidget(files_group)
         
-        # Progress bar
+        # Progress bar and status label
+        self.progress_status_label = QLabel()
+        self.progress_status_label.setAlignment(Qt.AlignLeft)
+        self.progress_status_label.setMinimumHeight(20)
+        self.main_layout.addWidget(self.progress_status_label)
+        
         self.progress = QProgressBar()
         self.main_layout.addWidget(self.progress)
         
@@ -250,18 +263,33 @@ class BaseToolDialog(QDialog):
     def _on_select_all(self, state):
         """Handle select all checkbox state change."""
         check_state = Qt.Checked if state == Qt.Checked else Qt.Unchecked
-        for i in range(self.file_list.count()):
-            self.file_list.item(i).setCheckState(check_state)
+        for i in range(self.file_model.rowCount()):
+            item = self.file_model.item(i)
+            item.setCheckState(check_state)
+        # Update start button state
+        self._update_start_button()
+
+    
             
+        
     def _on_item_changed(self, item):
         """Handle item change (including checkbox state change)."""
         self._update_start_button()
         
+    def _get_selected_files(self):
+        """Get list of selected file paths."""
+        selected_files = []
+        for i in range(self.file_model.rowCount()):
+            item = self.file_model.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_files.append(item.text())
+        return selected_files
+        
     def _update_start_button(self):
         """Update start button state based on file selection."""
         selected = False
-        for i in range(self.file_list.count()):
-            item = self.file_list.item(i)
+        for i in range(self.file_model.rowCount()):
+            item = self.file_model.item(i)
             if item.checkState() == Qt.Checked:
                 selected = True
                 break
@@ -276,35 +304,11 @@ class BaseToolDialog(QDialog):
             str(Path(self.project_dir)),
             "All Files (*.*)"
         )
-        first_file = True
-        first_file_path = ""
-        file_num = 0
         
         if files:
-            for file in files:
-                # Check if file matches pattern
-                success, _, _, _ = self.parser.parse_filename(Path(file).name)
-                if success:
-                    if first_file:
-                        first_file_path = file
-                        first_file = False
-                    file_num = file_num + 1
-                    item = QListWidgetItem(file)
-                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                    item.setCheckState(Qt.Unchecked)
-                    self.file_list.addItem(item)
-                else:
-                    logger.warning(f"Skipping file {file}: Does not match pattern")
-                    
-            if first_file_path:
-                _, parsed_parts, _, _ = self.parser.parse_filename(Path(first_file_path).name)
-                current_text = self.info_text.toPlainText()
-                file_info = (f"File Information:\n"
-                            f"Files Added: {file_num}\n"
-                            f"Last Parsed File: {os.path.basename(first_file_path)}\n"
-                            f"Parsed Parts: {parsed_parts}")
-                self.info_text.setPlainText(current_text.split("File Information:")[0] + file_info)
-            
+            # Create and start file adding worker
+            self._start_file_adding(files, is_folder=False)
+    
     def _on_add_folders(self):
         """Handle add folders button click."""
         folder = QFileDialog.getExistingDirectory(
@@ -312,42 +316,102 @@ class BaseToolDialog(QDialog):
             "Select Folder",
             str(Path(self.project_dir))
         )
-        first_file = True
-        first_file_path = ""
-        file_num = 0
         
         if folder:
-            # Walk through folder and add files
-            for root, _, files in os.walk(folder):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    # Check if file matches pattern
-                    success, _, _, _ = self.parser.parse_filename(file)
-                    if success:
-                        if first_file:
-                            first_file_path = file_path
-                            first_file = False
-                        file_num = file_num + 1
-                        item = QListWidgetItem(file_path)
-                        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                        item.setCheckState(Qt.Unchecked)
-                        self.file_list.addItem(item)
-                    else:
-                        logger.warning(f"Skipping file {file}: Does not match pattern")
-                        
-            if first_file_path:
-                _, parsed_parts, _, _ = self.parser.parse_filename(Path(first_file_path).name)
-                current_text = self.info_text.toPlainText()
-                file_info = (f"File Information:\n"
-                           f"Files Added: {file_num}\n"
-                           f"Last Parsed File: {os.path.basename(first_file_path)}\n"
-                           f"Parsed Parts: {parsed_parts}")
-                self.info_text.setPlainText(current_text.split("File Information:")[0] + file_info)
-                
+            # Create and start file adding worker
+            self._start_file_adding([folder], is_folder=True)
+    
+    def _start_file_adding(self, paths, is_folder=False):
+        """Start file adding in a separate thread.
+        
+        Args:
+            paths: List of file paths or folder paths to add
+            is_folder: Whether the paths are folders
+        """
+        # Create worker and thread
+        self.file_add_thread = QThread()
+        self.file_add_worker = FileAddWorker()
+        
+        # Set worker parameters
+        self.file_add_worker.paths = paths
+        self.file_add_worker.is_folder = is_folder
+        self.file_add_worker.parser = self.parser
+        
+        # Set up thread
+        self.file_add_worker.moveToThread(self.file_add_thread)
+        self.file_add_thread.started.connect(self.file_add_worker.run)
+        self.file_add_worker.progress.connect(self.progress.setValue)
+        self.file_add_worker.status_update.connect(self.progress_status_label.setText)
+        self.file_add_worker.file_found.connect(self._on_file_found)
+        self.file_add_worker.finished.connect(self.file_add_thread.quit)
+        self.file_add_worker.finished.connect(self.file_add_worker.deleteLater)
+        self.file_add_thread.finished.connect(self.file_add_thread.deleteLater)
+        self.file_add_thread.finished.connect(self._on_file_adding_finished)
+        self.file_add_worker.error.connect(self._show_error)
+        
+        # Disable UI during file adding
+        self.add_files.setEnabled(False)
+        self.add_folders.setEnabled(False)
+        self.start_button.setEnabled(False)
+        self.select_all.setEnabled(False)
+        self.file_list.setEnabled(False)
+        
+        # Start file adding
+        self.file_add_thread.start()
+    
+    def _on_file_found(self, file_path, is_first_file, parsed_parts):
+        """Handle when a file is found and should be added to the list.
+        
+        Args:
+            file_path: Path of the file to add
+            is_first_file: Whether this is the first file
+            parsed_parts: Parsed parts of the filename
+        """
+        # Create model item
+        item = QStandardItem(file_path)
+        item.setCheckable(True)
+        item.setCheckState(Qt.Unchecked)
+        self.file_model.appendRow(item)
+        
+        # Update info text if this is the first file
+        if is_first_file:
+            current_text = self.info_text.toPlainText()
+            file_info = (f"File Information:\n"
+                        f"Files Added: {self.file_model.rowCount()}\n"
+                        f"Last Parsed File: {os.path.basename(file_path)}\n"
+                        f"Parsed Parts: {parsed_parts}")
+            self.info_text.setPlainText(current_text.split("File Information:")[0] + file_info)
+    
+    def _on_file_adding_finished(self):
+        """Handle file adding completion."""
+        # Update info text with final count
+        current_text = self.info_text.toPlainText()
+        if "File Information:" in current_text:
+            lines = current_text.split("File Information:")[1].split("\n")
+            if len(lines) > 1:
+                # Update the file count line
+                lines[1] = f"Files Added: {self.file_model.rowCount()}"
+                file_info_part = "\n".join(lines)
+                new_text = current_text.split("File Information:")[0] + "File Information:" + file_info_part
+                self.info_text.setPlainText(new_text)
+        
+        # Re-enable UI
+        self.add_files.setEnabled(True)
+        self.add_folders.setEnabled(True)
+        self.select_all.setEnabled(True)
+        self.file_list.setEnabled(True)
+        self._update_start_button()
+        
+        # Clear thread and worker
+        self.file_add_thread = None
+        self.file_add_worker = None
+            
     def _on_reset_list(self):
         """Handle reset list button click."""
-        self.file_list.clear()
+        self.file_model.clear()
         self.start_button.setEnabled(False)
+        self.progress.setValue(0)
+        self.progress_status_label.setText("")
         
         # Update info text
         current_text = self.info_text.toPlainText()
@@ -390,6 +454,10 @@ class BaseToolDialog(QDialog):
         
         Should be overridden by subclasses to implement specific processing start.
         """
+        self.progress.setValue(0)
+        self.progress_status_label.setText("")
+
+
         pass
         
     def _on_processing_finished(self):
@@ -537,9 +605,193 @@ class BaseToolDialog(QDialog):
             self.worker = None
             
         # Clean up resources
-        if hasattr(self, 'file_list'):
-            self.file_list.clear()
+        if hasattr(self, 'file_model'):
+            self.file_model.clear()
         
-        super().closeEvent(event) 
+        super().closeEvent(event)
+
+    
+
+class FileAddWorker(QObject):
+    """Worker class for adding files in background thread."""
+    
+    # Signals
+    progress = pyqtSignal(int)  # Progress percentage
+    file_found = pyqtSignal(str, bool, dict)  # file_path, is_first_file, parsed_parts
+    status_update = pyqtSignal(str)  # Status message
+    finished = pyqtSignal()  # Finished signal
+    error = pyqtSignal(str)  # Error message
+    
+    def __init__(self):
+        """Initialize worker."""
+        super().__init__()
+        self.paths = []
+        self.is_folder = False
+        self.parser = None
+        self._is_cancelled = False
+        
+    def cancel(self):
+        """Cancel the file adding process."""
+        self._is_cancelled = True
+        
+    def run(self):
+        """Run the file adding process in background thread."""
+        try:
+            if self.is_folder:
+                self._add_folders()
+            else:
+                self._add_files()
+        except Exception as e:
+            logger.error(f"Error in file adding worker: {e}")
+            self.error.emit(str(e))
+        finally:
+            self.finished.emit()
+            
+    def _add_files(self):
+        """Add files to the list."""
+        total_files = len(self.paths)
+        first_file = True
+        
+        for i, file_path in enumerate(self.paths):
+            if self._is_cancelled:
+                break
+                
+            # Emit status update for current file
+            self.status_update.emit(f"Processing file: {os.path.basename(file_path)}")
+                
+            # Check if file matches pattern
+            success, parsed_parts, _, _ = self.parser.parse_filename(os.path.basename(file_path))
+            if success:
+                self.file_found.emit(file_path, first_file, parsed_parts)
+                first_file = False
+                
+            # Update progress
+            progress = int((i + 1) / total_files * 100)
+            self.progress.emit(progress)
+            
+    def _add_folders(self):
+        """Add files from folders to the list."""
+        # First phase: Count total top-level folders
+        total_folders = len([path for path in self.paths if os.path.isdir(path)])
+        
+        # Check if there's only one folder
+        folder_paths = [path for path in self.paths if os.path.isdir(path)]
+        
+        if total_folders == 1:
+            # If only one folder, process its subfolders individually
+            main_folder = folder_paths[0]
+            subfolders = [os.path.join(main_folder, item) for item in os.listdir(main_folder) 
+                         if os.path.isdir(os.path.join(main_folder, item))]
+            
+            # If no subfolders, treat the main folder as a subfolder
+            if not subfolders:
+                subfolders = [main_folder]
+                total_subfolders = 1
+            else:
+                total_subfolders = len(subfolders)
+            
+            processed_subfolders = 0
+            first_file = True
+            
+            for subfolder_path in subfolders:
+                if self._is_cancelled:
+                    break
+                    
+                # Emit status update for current subfolder
+                self.status_update.emit(f"Scanning folder: {os.path.basename(subfolder_path)}")
+                
+                # Count files in this subfolder
+                folder_file_count = 0
+                for root, _, files in os.walk(subfolder_path):
+                    folder_file_count += len(files)
+                
+                # Process files in this subfolder
+                processed_files_in_folder = 0
+                for root, _, files in os.walk(subfolder_path):
+                    if self._is_cancelled:
+                        break
+                        
+                    for file in files:
+                        if self._is_cancelled:
+                            break
+                            
+                        file_path = os.path.join(root, file)
+                        
+                        # Emit status update for current file
+                        self.status_update.emit(f"Scanning file: {os.path.basename(file_path)}")
+                        
+                        # Check if file matches pattern
+                        success, parsed_parts, _, _ = self.parser.parse_filename(os.path.basename(file_path))
+                        if success:
+                            self.file_found.emit(file_path, first_file, parsed_parts)
+                            first_file = False
+                            
+                        # Update progress based on files in current subfolder
+                        processed_files_in_folder += 1
+                        if folder_file_count > 0:
+                            # Calculate progress within current subfolder
+                            folder_progress = int(processed_files_in_folder / folder_file_count * 100)
+                            # Emit progress (0-100% for current subfolder)
+                            self.progress.emit(folder_progress)
+                
+                # Update overall subfolder progress
+                processed_subfolders += 1
+                if total_subfolders > 0:
+                    overall_progress = int(processed_subfolders / total_subfolders * 100)
+                    # Emit overall progress (0-100% for all subfolders)
+                    self.progress.emit(overall_progress)
+        else:
+            # Process each top-level folder
+            processed_folders = 0
+            first_file = True
+            
+            for folder_path in self.paths:
+                if self._is_cancelled:
+                    break
+                    
+                if os.path.isdir(folder_path):
+                    # Emit status update for current folder
+                    self.status_update.emit(f"Processing folder: {os.path.basename(folder_path)}")
+                    
+                    # Count files in this folder
+                    folder_file_count = 0
+                    for root, _, files in os.walk(folder_path):
+                        folder_file_count += len(files)
+                    
+                    # Process files in this folder
+                    processed_files_in_folder = 0
+                    for root, _, files in os.walk(folder_path):
+                        if self._is_cancelled:
+                            break
+                            
+                        for file in files:
+                            if self._is_cancelled:
+                                break
+                                
+                            file_path = os.path.join(root, file)
+                            
+                            # Emit status update for current file
+                            self.status_update.emit(f"Processing file: {os.path.basename(file_path)}")
+                            
+                            # Check if file matches pattern
+                            success, parsed_parts, _, _ = self.parser.parse_filename(os.path.basename(file_path))
+                            if success:
+                                self.file_found.emit(file_path, first_file, parsed_parts)
+                                first_file = False
+                                
+                            # Update progress based on files in current folder
+                            processed_files_in_folder += 1
+                            if folder_file_count > 0:
+                                # Calculate progress within current folder
+                                folder_progress = int(processed_files_in_folder / folder_file_count * 100)
+                                # Emit progress (0-100% for current folder)
+                                self.progress.emit(folder_progress)
+                    
+                    # Update overall folder progress
+                    processed_folders += 1
+                    if total_folders > 0:
+                        overall_progress = int(processed_folders / total_folders * 100)
+                        # Emit overall progress (0-100% for all folders)
+                        self.progress.emit(overall_progress)
 
     
