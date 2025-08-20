@@ -5,7 +5,7 @@ Base dialog and worker classes for seismic data processing tools.
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                            QLineEdit, QProgressBar, QPushButton, QCheckBox,
                            QListWidget, QMessageBox, QTextEdit, QListWidgetItem,
-                           QGroupBox, QFileDialog, QListView)
+                           QGroupBox, QFileDialog, QListView, QTreeView)
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtCore import QAbstractItemModel
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer
@@ -295,7 +295,33 @@ class BaseToolDialog(QDialog):
                 break
                 
         self.start_button.setEnabled(selected)
-        
+
+
+
+    def _getExistingDirectories(self, parent=None, caption="Select Folders", directory=""):
+
+        """Custom QFileDialog that allows selecting multiple folders."""
+        dialog = QFileDialog(parent, caption, directory)
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)  
+        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+
+        list_view = dialog.findChild(QListView, "listView")
+        if list_view:
+            list_view.setSelectionMode(QListView.ExtendedSelection)
+        tree_view = dialog.findChild(QTreeView)
+        if tree_view:
+            tree_view.setSelectionMode(QTreeView.ExtendedSelection)
+
+        if dialog.exec_() == QFileDialog.Accepted:
+            return dialog.selectedFiles()
+        return []
+
+
+
+
+
+
     def _on_add_files(self):
         """Handle add files button click."""
         files, _ = QFileDialog.getOpenFileNames(
@@ -309,17 +335,31 @@ class BaseToolDialog(QDialog):
             # Create and start file adding worker
             self._start_file_adding(files, is_folder=False)
     
+    # def _on_add_folders(self):
+    #     """Handle add folders button click."""
+    #     folder = QFileDialog.getExistingDirectory(
+    #         self,
+    #         "Select Folder",
+    #         str(Path(self.project_dir))
+    #     )
+        
+    #     if folder:
+    #         # Create and start file adding worker
+    #         self._start_file_adding([folder], is_folder=True)
+
     def _on_add_folders(self):
-        """Handle add folders button click."""
-        folder = QFileDialog.getExistingDirectory(
+        """Handle add folders button click (support multi-select)."""
+        folders = self._getExistingDirectories(
+
             self,
-            "Select Folder",
+            "Select Folders",
             str(Path(self.project_dir))
         )
         
-        if folder:
+        if folders:
             # Create and start file adding worker
-            self._start_file_adding([folder], is_folder=True)
+            self._start_file_adding(folders, is_folder=True)
+
     
     def _start_file_adding(self, paths, is_folder=False):
         """Start file adding in a separate thread.
@@ -662,7 +702,7 @@ class FileAddWorker(QObject):
             # Check if file matches pattern
             success, parsed_parts, _, _ = self.parser.parse_filename(os.path.basename(file_path))
             if success:
-                self.file_found.emit(file_path, first_file, parsed_parts)
+                self.file_found.emit(str(Path(file_path)), first_file, parsed_parts)
                 first_file = False
                 
             # Update progress
@@ -715,7 +755,7 @@ class FileAddWorker(QObject):
                         if self._is_cancelled:
                             break
                             
-                        file_path = os.path.join(root, file)
+                        file_path = str(Path(root) / file)
                         
                         # Emit status update for current file
                         self.status_update.emit(f"Scanning file: {os.path.basename(file_path)}")
@@ -768,7 +808,7 @@ class FileAddWorker(QObject):
                             if self._is_cancelled:
                                 break
                                 
-                            file_path = os.path.join(root, file)
+                            file_path = str(Path(root) / file)
                             
                             # Emit status update for current file
                             self.status_update.emit(f"Processing file: {os.path.basename(file_path)}")
