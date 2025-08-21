@@ -53,6 +53,7 @@ class FileProcessingWorker(BaseToolWorker):
             return
             
         logger.info(f"Processing file: {filename}")
+        self.status_update.emit(f"Processing file: {os.path.basename(filename)}")
         
         try:
             # Parse filename using FileNameParser

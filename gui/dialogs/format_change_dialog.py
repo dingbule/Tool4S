@@ -60,6 +60,7 @@ class FormatChangeWorker(BaseToolWorker):
             filepath: Path of file to process
         """
         logger.info(f"Processing file: {filepath}")
+        self.status_update.emit(f"Processing file: {os.path.basename(filepath)}")
         
         try:
             # Parse filename using FileNameParser

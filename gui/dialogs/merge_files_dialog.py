@@ -77,6 +77,7 @@ class FileMergeWorker(BaseToolWorker):
                     
                 try:
                     logger.info(f"Processing group {group_index + 1}/{total_groups}: {group_key}")
+                    self.status_update.emit(f"Processing group: {group_key}")
                     self._process_group(group_key, files)
                     
                     # Update progress

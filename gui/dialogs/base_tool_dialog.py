@@ -26,7 +26,7 @@ class BaseToolWorker(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(str)
     output_folder_created = pyqtSignal(str)  # New signal for output folder creation
-    
+    status_update = pyqtSignal(str)  # New signal for status updates
     def __init__(self):
         """Initialize worker."""
         super().__init__()
@@ -575,6 +575,8 @@ class BaseToolDialog(QDialog):
         """
         if self.worker:
             self.worker.output_folder_created.connect(self._on_output_folder_created)
+            self.worker.status_update.connect(self.progress_status_label.setText)
+
             
     def _on_output_folder_created(self, folder_path):
         """Handle output folder creation.
@@ -697,7 +699,7 @@ class FileAddWorker(QObject):
                 break
                 
             # Emit status update for current file
-            self.status_update.emit(f"Processing file: {os.path.basename(file_path)}")
+            self.status_update.emit(f"Scanning file: {os.path.basename(file_path)}")
                 
             # Check if file matches pattern
             success, parsed_parts, _, _ = self.parser.parse_filename(os.path.basename(file_path))
@@ -791,7 +793,7 @@ class FileAddWorker(QObject):
                     
                 if os.path.isdir(folder_path):
                     # Emit status update for current folder
-                    self.status_update.emit(f"Processing folder: {os.path.basename(folder_path)}")
+                    self.status_update.emit(f"Scanning folder: {os.path.basename(folder_path)}")
                     
                     # Count files in this folder
                     folder_file_count = 0
@@ -811,7 +813,7 @@ class FileAddWorker(QObject):
                             file_path = str(Path(root) / file)
                             
                             # Emit status update for current file
-                            self.status_update.emit(f"Processing file: {os.path.basename(file_path)}")
+                            self.status_update.emit(f"Scanning file: {os.path.basename(file_path)}")
                             
                             # Check if file matches pattern
                             success, parsed_parts, _, _ = self.parser.parse_filename(os.path.basename(file_path))
