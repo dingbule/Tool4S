@@ -56,7 +56,7 @@ class PSDCalculator:
         self._response_removal_enabled = False
         
         # PSD frequency range
-        self._psd_freq_min = 0.001  # Hz
+        self._psd_freq_min = 0.01  # Hz
         self._psd_freq_max = 100.0  # Hz
         
         # Results storage
