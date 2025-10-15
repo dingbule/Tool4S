@@ -20,6 +20,7 @@ from gui.dialogs.psd_parameter_test_dialog import PSDParameterTestDialog
 from gui.dialogs.psd_pdf_dialog import PSDPDFDialog
 from utils.config import config
 from gui.dialogs.project_parameters_dialog import ProjectParametersDialog
+from gui.dialogs.project_scan_dialog import ProjectScanDialog
 from gui.dialogs.merge_files_dialog import MergeFilesDialog
 from utils.window_utils import set_window_size, center_window, set_window_title
 from utils.constants import (DEFAULT_OUTPUT_FOLDER, PSD_FOLDER_NAME, 
@@ -189,6 +190,7 @@ class MainWindow(QMainWindow):
         project_actions = [
             ("Open Project Directory", "Ctrl+O", self._open_project_directory),
             ("Project Parameters...", "Ctrl+P", self._show_project_parameters),
+            ("Scan Project", "Ctrl+S", self._show_project_scan_dialog),
             (None, None, None),  # Separator
             ("Exit", "Ctrl+Q", self.close)
         ]
@@ -843,6 +845,15 @@ check the new reader list and restart this application.")
         except Exception as e:
             logger.error(f"Failed to reload plugins: {e}")
             QMessageBox.critical(self, "Error", f"Failed to reload plugins: {str(e)}")
+            
+    def _show_project_scan_dialog(self):
+        """Show project scan dialog."""
+        if not self._check_project_directory():
+            return
+            
+        
+        dialog = ProjectScanDialog(self.project_dir, self)
+        dialog.exec_()
             
     def _load_initial_state(self):
         """Load initial state from config."""

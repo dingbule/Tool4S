@@ -11,6 +11,7 @@ from .psd_parameter_test_dialog import PSDParameterTestDialog
 from .psd_pdf_dialog import PSDPDFDialog
 from .merge_files_dialog import MergeFilesDialog
 from .base_tool_dialog import BaseToolDialog
+from .project_scan_dialog import ProjectScanDialog
 
 __all__ = [
     'ProjectParametersDialog',
@@ -21,5 +22,6 @@ __all__ = [
     'PSDParameterTestDialog',
     'PSDPDFDialog',
     'MergeFilesDialog',
-    'BaseToolDialog'
-] 
+    'BaseToolDialog',
+    'ProjectScanDialog'
+]
