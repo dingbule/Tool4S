@@ -32,8 +32,7 @@ class FormatChangeWorker(BaseToolWorker):
     def __init__(self):
         """Initialize worker."""
         super().__init__()
-        self.orig_format = None  # Will be set from data.json
-        self.final_format = None  # Will be set from data.json
+        # Use inherited file_format and output_format from BaseToolWorker
         self.file_list = []
         
         self.start_datetime = None
@@ -41,10 +40,6 @@ class FormatChangeWorker(BaseToolWorker):
         self.components = []  # Will be set from data.json
         self.parser = None
         self.project_data = None
-        
-        # Initialize plugin manager
-        self.plugin_manager = PluginManager()
-        self.readers = self.plugin_manager.get_available_readers()
         
         # Add cancellation flag
         self._is_cancelled = False
@@ -80,24 +75,16 @@ class FormatChangeWorker(BaseToolWorker):
             # Log the parts we're using
             logger.info(f"Using parts for file: Net={net}, STA={sta}, LOC={loc}, NEZ={cha}")
             
-            # Get appropriate reader - try both with and without dot, and both cases
-            orig_format = self.orig_format.lower()  # Convert to lowercase
-            reader_class = (self.plugin_manager.get_available_readers().get(f".{orig_format}") or 
-                          self.plugin_manager.get_available_readers().get(orig_format) or
-                          self.plugin_manager.get_available_readers().get(f".{orig_format.upper()}") or
-                          self.plugin_manager.get_available_readers().get(orig_format.upper()))
-            
-            if not reader_class:
-                error_msg = f"No reader found for format: {self.orig_format}"
+            # Use pre-acquired reader
+            if not self.reader:
+                error_msg = "Reader not initialized. Please check project configuration."
                 logger.error(error_msg)
                 self.error.emit(error_msg)
                 return
-                
-            reader = reader_class()
             
             # Read data
             file_path = Path(self.project_dir) / filepath
-            data = reader.read(str(file_path))
+            data = self.reader.read(str(file_path))
             if data is None:
                 error_msg = f"Failed to read data from {filepath}"
                 logger.error(error_msg)
@@ -144,22 +131,17 @@ class FormatChangeWorker(BaseToolWorker):
                     # Get start time from data
                     start_time = trace.stats.starttime.strftime("%Y%m%d%H%M%S")
                     
-                    # Create output filename
-                    out_file = out_dir / f"{sta}.{component}.{start_time}.{self.final_format.lower()}"
+                    # Create output filename using output_format
+                    file_extension = self.output_format.lstrip('.')
+                    out_file = out_dir / f"{sta}.{component}.{start_time}.{file_extension}"
                     logger.info(f"Writing component {i} ({component}) to: {out_file}")
                     
                     # Get writer for final format
-                    final_format = self.final_format.lower()
-                    writer_class = (self.plugin_manager.get_available_readers().get(f".{final_format}") or 
-                                  self.plugin_manager.get_available_readers().get(final_format) or
-                                  self.plugin_manager.get_available_readers().get(f".{final_format.upper()}") or
-                                  self.plugin_manager.get_available_readers().get(final_format.upper()))
-                    
-                    if not writer_class:
-                        raise ValueError(f"No writer found for format: {self.final_format}")
+                    if not self.writer:
+                        logger.error("Writer not initialized. Please setup writer first.")
+                        raise ValueError("Writer not initialized")
                         
-                    writer = writer_class()
-                    writer.write(str(out_file), Stream([trace]))
+                    self.writer.write(str(out_file), Stream([trace]))
                     
                     if not out_file.exists():
                         logger.error(f"Failed to create output file: {out_file}")
@@ -275,14 +257,24 @@ class FormatChangeDialog(BaseToolDialog):
         self.worker.file_list = selected_files
         self.worker.project_dir = self.project_dir
         self.worker.project_data = self.project_data
-        self.worker.plugin_manager = self.plugin_manager
         self.worker.parser = self.parser
         
-        # Get format and component settings from data.json
-        if self.project_data and 'data_params' in self.project_data:
-            params = self.project_data['data_params']
-            self.worker.orig_format = params.get('dataFormat', 'MSEED')
-            self.worker.final_format = params.get('outputFormat', 'MSEED')
+        # Setup reader for the worker
+        try:
+            self.worker.setup_reader()
+        except Exception as e:
+            logger.error(f"Failed to setup reader: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to setup reader: {e}")
+            return
+            
+        # Setup writer for the worker
+        try:
+            self.worker.setup_writer()
+        except Exception as e:
+            logger.error(f"Failed to setup writer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to setup writer: {e}")
+            return
+        
         
         # Connect worker signals
         self.connect_worker_signals()

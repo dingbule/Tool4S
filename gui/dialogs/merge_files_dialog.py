@@ -18,7 +18,6 @@ from datetime import datetime
 
 from core.plugin_manager import PluginManager
 from utils.config import config
-from utils.file_utils import get_file_format_and_reader
 from utils.file_name_parser import FileNameParser
 from gui.dialogs.base_tool_dialog import BaseToolDialog, BaseToolWorker
 from utils.constants import DEFAULT_OUTPUT_FOLDER
@@ -37,7 +36,6 @@ class FileMergeWorker(BaseToolWorker):
         super().__init__()
         self.file_list = []
         self.merged_length = 3600  # Default to 1 hour
-        self.file_format = 'MSEED'  # Will be set from data.json
         self.start_on_hour = False  # Will be set from data.json
         self.zero_padded_percent = 50  # Default to 50%
         self.project_dir = None
@@ -102,9 +100,9 @@ class FileMergeWorker(BaseToolWorker):
             return True
             
         try:
-            # Get file format and reader
-            file_format, reader = get_file_format_and_reader(files[0], self.project_data)
-            if not reader:
+            # Use pre-acquired reader
+            if not self.reader:
+                logger.error("Reader not initialized")
                 return True  # Skip verification if no reader
                 
             # Read start times
@@ -112,7 +110,7 @@ class FileMergeWorker(BaseToolWorker):
             for filename in files:
                 try:
                     file_path = Path(self.project_dir) / filename
-                    data = reader.read_header(str(file_path))
+                    data = self.reader.read_header(str(file_path))
                     if data:
                         times.append(data[0].stats.starttime)
                 except Exception:
@@ -129,7 +127,7 @@ class FileMergeWorker(BaseToolWorker):
             return True  # Skip verification on error
 
     def _group_files(self, files):
-        """Group files by NET.STATION.Location.CHANNEL"""
+        """Group files by NET.STATION.LOCATION.CHANNEL"""
         groups = {}
         for filename in files:
             try:
@@ -162,10 +160,10 @@ class FileMergeWorker(BaseToolWorker):
         if not files:
             return
             
-        # Get file format and reader
-        file_format, reader = get_file_format_and_reader(files[0], self.project_data)
-        if not reader:
-            raise ValueError(f"No suitable reader found for format: {file_format}")
+        # Use pre-acquired reader
+        if not self.reader:
+            logger.error("Reader not initialized")
+            raise ValueError("Reader not initialized")
             
         # Parse first file to get group info
         success, parsed_parts, _, error = self.parser.parse_filename(Path(files[0]).name)
@@ -179,7 +177,7 @@ class FileMergeWorker(BaseToolWorker):
         while current_index < len(files):
             try:
                 # Read first file to get start time
-                data = reader.read(str(Path(self.project_dir) / files[current_index]))
+                data = self.reader.read(str(Path(self.project_dir) / files[current_index]))
                 if not data:
                     current_index += 1
                     self.progress.emit(int(current_index / total_files * 100))
@@ -214,7 +212,7 @@ class FileMergeWorker(BaseToolWorker):
                     print(current_file)
                     
                     # Read data
-                    data = reader.read(str(Path(self.project_dir) / current_file))
+                    data = self.reader.read(str(Path(self.project_dir) / current_file))
                     if not data:
                         current_index += 1
                         continue
@@ -278,19 +276,26 @@ class FileMergeWorker(BaseToolWorker):
                             # Create output directory and emit signal
                             out_dir = self.create_output_directory(out_dir)
                             
-                            # Create output filename
-                            out_file = out_dir / f"{parsed_parts['Station']}.{component}.{start_time.strftime('%Y%m%d%H%M%S')}.{self.file_format.lower()}"
+                            # Create output filename - use output_format from writer setup
+                            file_extension = self.output_format.lstrip('.')
+                            out_file = out_dir / f"{parsed_parts['Station']}.{component}.{start_time.strftime('%Y%m%d%H%M%S')}.{file_extension}"
+                            
+                            logger.info(f"Creating output file: {out_file} (extension: {file_extension})")
                             
                             # Write component data
-                            writer_class = self.plugin_manager.get_reader(self.file_format)
-                            if not writer_class:
-                                raise ValueError(f"No writer found for format: {self.file_format}")
-                            writer = writer_class()
-                            writer.write(str(out_file), output_stream[i])
+                            if not self.writer:
+                                logger.error("Writer not initialized. Please setup writer first.")
+                                logger.error(f"Writer state: {self.writer}, output_format: {getattr(self, 'output_format', 'Not set')}")
+                                raise ValueError("Writer not initialized")
+                            
+                            logger.info(f"Writing file: {out_file} with writer: {self.writer}")
+                            self.writer.write(str(out_file), output_stream[i])
                         
                 
                 # Update progress
-                self.progress.emit(int(current_index / total_files * 100))
+                progress_value = int(current_index / total_files * 100)
+                logger.info(f"Emitting progress: {progress_value}% ({current_index}/{total_files})")
+                self.progress.emit(progress_value)
                 
             except Exception as e:
                 logger.error(f"Error processing file {files[current_index]}: {e}")
@@ -357,11 +362,26 @@ class MergeFilesDialog(BaseToolDialog):
         # Get format and start_on_hour from data.json
         if self.project_data and 'data_params' in self.project_data:
             params = self.project_data['data_params']
-            self.worker.file_format = params.get('outputFormat', 'MSEED')
             self.worker.start_on_hour = params.get('startOnHour', False)
             self.worker.trace_num = params.get('traceNum', 1)
             if 'componentName' in params:
                 self.worker.components = params['componentName'].split(',')
+
+        # Setup reader for the worker
+        try:
+            self.worker.setup_reader()
+        except Exception as e:
+            logger.error(f"Failed to setup reader: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to setup reader: {e}")
+            return
+            
+        # Setup writer for the worker
+        try:
+            self.worker.setup_writer()
+        except Exception as e:
+            logger.error(f"Failed to setup writer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to setup writer: {e}")
+            return
 
         # Connect worker signals
         self.connect_worker_signals()
@@ -369,7 +389,13 @@ class MergeFilesDialog(BaseToolDialog):
         # Set up thread
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
-        self.worker.progress.connect(self.progress.setValue)
+        
+        # Debug: Add logging for progress connection
+        def debug_progress_update(value):
+            logger.info(f"Progress bar receiving value: {value}")
+            self.progress.setValue(value)
+            
+        self.worker.progress.connect(debug_progress_update)
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)

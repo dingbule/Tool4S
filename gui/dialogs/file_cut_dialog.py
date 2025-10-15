@@ -18,7 +18,6 @@ from datetime import datetime
 
 from core.plugin_manager import PluginManager
 from utils.config import config
-from utils.file_utils import get_file_format_and_reader
 from utils.file_name_parser import FileNameParser
 from gui.dialogs.base_tool_dialog import BaseToolDialog, BaseToolWorker
 from utils.constants import DEFAULT_OUTPUT_FOLDER
@@ -35,13 +34,12 @@ class FileProcessingWorker(BaseToolWorker):
         self.tail_remove_length = 0
         self.first_file_offset = 0
         self.time_length = 3600  # Default to 1 hour
-        self.file_format = 'MSEED'  # Will be set from data.json
+        # file_format and output_format are inherited from BaseToolWorker
         self.start_on_hour = False  # Will be set from data.json
         self.overlap_percent = 0  # Default to 0%
         self.start_time = None
         self.project_dir = None
         self.project_data = None
-        self.plugin_manager = None
         self.parser = None
         self._is_cancelled = False
         self.trace_num = 1  # Default to single component
@@ -76,17 +74,16 @@ class FileProcessingWorker(BaseToolWorker):
             # Get file path
             file_path = Path(self.project_dir) / filename
             
-            # Get file format and reader
-            file_format, reader = get_file_format_and_reader(filename, self.project_data)
-            if not reader:
-                error_msg = f"No suitable reader found for format: {file_format}"
+            # Use pre-acquired reader
+            if not self.reader:
+                error_msg = "Reader not initialized. Please check project configuration."
                 logger.error(error_msg)
                 self.error.emit(error_msg)
                 return
 
             # Read data using the reader
             try:
-                data = reader.read(str(file_path))
+                data = self.reader.read(str(file_path))
                 if data is None:
                     error_msg = f"Failed to read data from file: {filename}"
                     logger.error(error_msg)
@@ -184,16 +181,7 @@ class FileProcessingWorker(BaseToolWorker):
                         logger.error(f"Invalid indices for file {filename}: start_index={start_index}, file_end_index={file_end_index}")
                         return
 
-                    # Get reader for the specified format
-                    reader_class = self.plugin_manager.get_reader(self.file_format)
-                    if not reader_class:
-                        msg = f"No suitable reader found for format: {self.file_format}"
-                        logger.error(msg)
-                        self.error.emit(msg)
-                        return
-
-                    # Create reader instance
-                    reader = reader_class()
+                   
 
                     # Process and save data in time_length increments
                     current_start = start_index
@@ -240,7 +228,9 @@ class FileProcessingWorker(BaseToolWorker):
                         out_dir = self.create_output_directory(out_dir)
                         
                         # Create output filename
-                        out_file = out_dir / f"{sta}.{metadata['channel']}.{current_time_str}.{self.file_format.lower()}"
+                        # Create output filename using output_format
+                        file_extension = self.output_format.lstrip('.')
+                        out_file = out_dir / f"{sta}.{metadata['channel']}.{current_time_str}.{file_extension}"
                         logger.info(f"Writing output to: {out_file}")
 
                         # Create new trace with segment data
@@ -251,12 +241,15 @@ class FileProcessingWorker(BaseToolWorker):
                         tr_new.stats.network = metadata.get('network', '')
                         tr_new.stats.channel = metadata['channel']
                         
-                        # Save segment using the reader's write method
+                        # Save segment using the writer
                         try:
-                            reader.write(str(out_file), tr_new)
+                            if not self.writer:
+                                logger.error("Writer not initialized. Please setup writer first.")
+                                raise ValueError("Writer not initialized")
+                            self.writer.write(str(out_file), tr_new)
                             logger.info(f"Saved segment: {out_file}")
                         except Exception as e:
-                            msg = f"Failed to write segment using {self.file_format} reader: {str(e)}"
+                            msg = f"Failed to write segment: {str(e)}"
                             logger.error(msg)
                             self.error.emit(msg)
                             return
@@ -383,13 +376,27 @@ class FileCutDialog(BaseToolDialog):
         self.worker.overlap_percent = overlap_percent
         self.worker.project_dir = self.project_dir
         self.worker.project_data = self.project_data
-        self.worker.plugin_manager = self.plugin_manager
         self.worker.parser = self.parser
+        
+        # Setup reader for the worker
+        try:
+            self.worker.setup_reader()
+        except Exception as e:
+            logger.error(f"Failed to setup reader: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to setup reader: {e}")
+            return
+            
+        # Setup writer for the worker
+        try:
+            self.worker.setup_writer()
+        except Exception as e:
+            logger.error(f"Failed to setup writer: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to setup writer: {e}")
+            return
         
         # Get format and start_on_hour from data.json
         if self.project_data and 'data_params' in self.project_data:
             params = self.project_data['data_params']
-            self.worker.file_format = params.get('outputFormat', 'MSEED')
             self.worker.start_on_hour = params.get('startOnHour', False)
             self.worker.trace_num = params.get('traceNum', 1)
             if 'componentName' in params:

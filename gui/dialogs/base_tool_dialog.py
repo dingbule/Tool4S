@@ -16,6 +16,7 @@ import json
 
 from core.plugin_manager import PluginManager
 from utils.file_name_parser import FileNameParser
+from utils.file_utils import get_file_format_and_reader, get_output_format_and_writer
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +33,15 @@ class BaseToolWorker(QObject):
         super().__init__()
         self.file_list = []
         self.file_format = 'MSEED'  # Will be set from data.json
+        self.output_format = 'MSEED'  # Will be set from data.json
         self.project_dir = None
         self.project_data = None
-        self.plugin_manager = None
         self.parser = None
         self._is_cancelled = False
         self.trace_num = 1  # Default to single component
         self.components = []  # Component(channel) names from data.json or file's name
+        self.reader = None  # Pre-acquired reader instance
+        self.writer = None
         
     def run(self):
         """Process all files in the list. 
@@ -73,6 +76,54 @@ class BaseToolWorker(QObject):
             logger.error(f"Error in processing: {e}")
             self.error.emit(str(e))
             self.finished.emit()
+            
+    def setup_reader(self):
+        """Setup reader based on project data.
+        
+        This method should be called after setting project_data and project_dir.
+        """
+        if not self.project_data or not self.project_dir:
+            logger.warning("Cannot setup reader: project_data or project_dir not set")
+            return
+            
+        try:
+            # Get reader using file_utils
+            file_format, reader_class = get_file_format_and_reader(
+                self.project_data
+            )
+            
+            # Create reader instance
+            self.reader = reader_class()
+            self.file_format = file_format
+            logger.info(f"Reader setup complete: {file_format} format")
+            
+        except Exception as e:
+            logger.error(f"Failed to setup reader: {e}")
+            self.reader = None
+            
+    def setup_writer(self):
+        """Setup writer based on project data.
+        
+        This method should be called after setting project_data and project_dir.
+        """
+        if not self.project_data or not self.project_dir:
+            logger.warning("Cannot setup writer: project_data or project_dir not set")
+            return
+            
+        try:
+            # Get writer using file_utils
+            output_format, writer_class = get_output_format_and_writer(
+                self.project_data
+            )
+            
+            # Create writer instance
+            self.writer = writer_class()
+            self.output_format = output_format
+            logger.info(f"Writer setup complete: {output_format} format")
+            
+        except Exception as e:
+            logger.error(f"Failed to setup writer: {e}")
+            self.writer = None
             
     def process_file(self, filename):
         """Process a single file.

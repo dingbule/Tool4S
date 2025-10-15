@@ -36,6 +36,7 @@ class CreateFileWorker(QObject):
         """Initialize worker."""
         super().__init__()
         self.project_dir = None
+        self.project_data = None
         self.checked_paths = []
         self.overlap_percent = 50.0  # Changed default to 50%
         self.file_length_hours = 1.0  # Default 1 hour
@@ -43,21 +44,86 @@ class CreateFileWorker(QObject):
         
         # Initialize plugin manager
         self.plugin_manager = PluginManager()
+        self._cancelled = False
         
-    def run(self):
-        """Process all checked component directories."""
-        if not self.checked_paths:
-            logger.warning("No component directories to process")
-            self.error.emit("No component directories to process")
-            self.finished.emit()
+        # Initialize reader and writer (will be set up when project_data is available)
+        self.reader = None
+        self.writer = None
+        self.output_format = None
+        
+    def cancel(self):
+        """Cancel the operation."""
+        self._cancelled = True
+        
+    def setup_reader_writer(self):
+        """Setup reader and writer based on project data."""
+        if not self.project_data:
+            logger.error("Cannot setup reader/writer: project_data not set")
             return
             
         try:
+            # Get input format from first available file
+            from utils.file_utils import get_file_format_and_reader, get_output_format_and_writer
+            
+            # Setup reader
+            input_format, reader_class = get_file_format_and_reader(self.project_data)
+            if reader_class:
+                self.reader = reader_class()
+                logger.info(f"Reader setup complete: {input_format} format")
+            else:
+                logger.error(f"No reader found for input format: {input_format}")
+                
+            # Setup writer  
+            output_format, writer_class = get_output_format_and_writer(self.project_data)
+            if writer_class:
+                self.writer = writer_class()
+                self.output_format = output_format
+                logger.info(f"Writer setup complete: {output_format} format")
+            else:
+                logger.error(f"No writer found for output format: {output_format}")
+                
+        except Exception as e:
+            logger.error(f"Error setting up reader/writer: {e}")
+            raise
+        
+    def run(self):
+        """Process all checked component directories."""
+        try:
+            # Setup reader and writer first
+            self.setup_reader_writer()
+            
+            if not self.reader or not self.writer:
+                self.error.emit("Failed to setup reader or writer")
+                return
+                
+            # Check for cancellation
+            if self._cancelled:
+                return
+                
+        except Exception as e:
+            logger.error(f"Error setting up reader/writer: {e}")
+            self.error.emit(f"Failed to setup reader/writer: {str(e)}")
+            return
+            
+        try:
+            # Check for cancellation
+            if self._cancelled:
+                return
+                
+            if not self.checked_paths:
+                logger.warning("No component directories to process")
+                self.error.emit("No component directories to process")
+                self.finished.emit()
+                return
+            
             # Calculate total work to be done
             total_work = len(self.checked_paths)
             
             # Process each checked component directory
             for i, component_path in enumerate(self.checked_paths):
+                if self._cancelled:
+                    break
+                    
                 try:
                     # Get station and component from path
                     path_parts = Path(component_path).parts
@@ -66,7 +132,7 @@ class CreateFileWorker(QObject):
                         continue
                         
                     sta, nez = path_parts[-2], path_parts[-1]
-                    component_dir = os.path.join(self.project_dir, component_path)
+                    component_dir = str(component_path)
                     
                     if not os.path.isdir(component_dir):
                         logger.warning(f"Component directory does not exist: {component_dir}")
@@ -114,14 +180,11 @@ class CreateFileWorker(QObject):
                 return
                 
             # Get reader for the format from the first file's extension
-            format_ext = Path(first_file).suffix[1:].lower()  # Get format without dot
-            reader_class = (self.plugin_manager.get_available_readers().get(f".{format_ext}") or 
-                          self.plugin_manager.get_available_readers().get(format_ext))
-            
-            if not reader_class:
-                raise ValueError(f"No reader found for format: {format_ext}")
+            if not self.reader:
+                logger.error("Reader not initialized")
+                return
                 
-            reader = reader_class()
+            reader = self.reader
             
             # Create a report file for missing data
             report_file = os.path.join(component_dir, f"Create_report.txt")
@@ -143,6 +206,13 @@ class CreateFileWorker(QObject):
             
             # Convert file length from hours to seconds
             L = self.file_length_hours * 3600
+            
+            # Get file extension from output_format
+            if not self.output_format:
+                logger.error("Output format not set")
+                return
+                
+            file_extension = self.output_format.lstrip('.')
             
             # Calculate first createdd file's start time
             overlap_seconds = L * (self.overlap_percent / 100)
@@ -172,7 +242,7 @@ class CreateFileWorker(QObject):
                 created_files.append({
                     'starttime': current_start,
                     'endtime': current_end,
-                    'name': f"{sta}.{nez}.{current_start.strftime('%Y%m%d%H%M%S')}.{format_ext}"
+                    'name': f"{sta}.{nez}.{current_start.strftime('%Y%m%d%H%M%S')}.{file_extension}"
                 })
                 current_start += step_seconds
                 
@@ -268,8 +338,13 @@ class CreateFileWorker(QObject):
                 # Create a new stream with the created trace
                 created_stream = Stream([created_trace])
                 
-                # Write created data
-                reader.write(str(out_file), created_stream)
+                # Get writer for the format
+                if not self.writer:
+                    logger.error("Writer not initialized")
+                    return
+                    
+                writer = self.writer
+                writer.write(str(out_file), created_stream)
                 logger.info(f"Created created file: {out_file}")
 
                 # Update progress after each created file is created
@@ -334,6 +409,10 @@ class CreateFileDialog(QDialog):
         self.worker = None
         self.output_dir=None
         self.thread = None
+        self.project_data = None
+        
+        # Load project data first
+        self._load_project_data()
         
         # Get plugin manager from parent window
         if parent and hasattr(parent, 'plugin_manager'):
@@ -346,6 +425,23 @@ class CreateFileDialog(QDialog):
         # Initialize UI
         self._init_ui()
         self.scan_stations()
+        
+    def _load_project_data(self):
+        """Load project data from data.json."""
+        try:
+            data_file = Path(self.project_dir) / 'data.json'
+            if data_file.exists():
+                with open(data_file, 'r', encoding='utf-8') as f:
+                    self.project_data = json.load(f)
+                logger.info("Successfully loaded project data")
+            else:
+                logger.warning(f"data.json not found at {data_file}")
+                # Set default project data
+                self.project_data = {'data_params': {'outputFolder': DEFAULT_OUTPUT_FOLDER}}
+        except Exception as e:
+            logger.error(f"Error loading project data: {e}")
+            # Set default project data
+            self.project_data = {'data_params': {'outputFolder': DEFAULT_OUTPUT_FOLDER}}
         
     def _init_ui(self):
         """Initialize UI components."""
@@ -461,25 +557,13 @@ class CreateFileDialog(QDialog):
     def scan_stations(self):
         """Scan for stations and components in the project directory."""
         try:
-            # Get project data to check which parts are available
-            try:
-                data_file = Path(self.project_dir) / 'data.json'
-                with open(data_file, 'r', encoding='utf-8') as f:
-                    self.project_data = json.load(f)
-                
-                # Get output folder from project data
-                if self.project_data:
-                    output_folder = self.project_data.get('data_params', {}).get('outputFolder', DEFAULT_OUTPUT_FOLDER)
-                else:
-                    output_folder = DEFAULT_OUTPUT_FOLDER  # Default value
-                
-            except Exception as e:
-                logger.warning(f"Error reading data.json, using basic structure: {e}")
+            # Get output folder from project data
+            if self.project_data:
+                output_folder = self.project_data.get('data_params', {}).get('outputFolder', DEFAULT_OUTPUT_FOLDER)
+            else:
                 output_folder = DEFAULT_OUTPUT_FOLDER  # Default value
-                self.project_data = {'data_params': {'outputFolder': output_folder}}
             
             # Construct the output directory path
-
             output_dir = Path(self.project_dir) / output_folder
             
             if not output_dir.exists():
@@ -815,7 +899,8 @@ class CreateFileDialog(QDialog):
         
         # Set worker parameters
         self.worker.project_dir = self.project_dir
-        self.worker.checked_paths = checked_paths
+        self.worker.project_data = self.project_data
+        self.worker.checked_paths = [str(path) for path in checked_paths]
         self.worker.overlap_percent = self.overlap_percent.value()
         self.worker.file_length_hours = self.file_length.value()
         self.worker.max_zero_padded_percent = self.max_zero_padded.value()
@@ -908,4 +993,4 @@ class CreateFileDialog(QDialog):
             self.thread = None
             self.worker = None
             
-        super().reject() 
+        super().reject()
