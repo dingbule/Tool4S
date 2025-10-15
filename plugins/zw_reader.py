@@ -310,6 +310,12 @@ class ZWReader(DataReader):
             'sampling_rate': header.sps,
             'starttime': start_time,
         }
+        #The latitude and longitude are swapped in the header of ZW, so we need to swap them back
+        stats['coordinates'] = {
+                'latitude': header.x,
+                'longitude': header.y,
+                'elevation': header.z  
+            }
         
         # Add traces for each component
         components = {'E': 0, 'N': 1, 'Z': 2}
