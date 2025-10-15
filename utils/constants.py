@@ -12,7 +12,7 @@ PSD_FILE_SUFFIX = "_psd.npz"
 
 # Application name
 APP_NAME = "Tool4S"
-APP_FULL_NAME = "Tool for Seismic Site Station Selection data processing and analysis" 
+APP_FULL_NAME = "Tool for Seismic Station Site Selection data processing and analysis" 
 
 # Version information
 APP_VERSION = "1.0.0"
